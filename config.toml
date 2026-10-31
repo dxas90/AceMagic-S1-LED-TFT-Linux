@@ -1,0 +1,72 @@
+[device]
+# LCD HID path string (use "auto" to scan by VID/PID 0x04D9:0xFD01)
+lcd = "auto"
+# Serial port for LED strip (CH340 USB-Serial)
+led = "/dev/ttyUSB0"
+
+[display]
+# Sensor sampling interval (ms)
+poll_ms = 500
+# Minimum time between full LCD refreshes (ms)
+refresh_ms = 1600
+# LCD heartbeat / clock sync interval (ms)
+heartbeat_ms = 60000
+# Physical display dimensions
+width = 320
+height = 170
+
+[web]
+listen = "0.0.0.0:8686"
+
+[theme]
+file = "themes/simple_demo/portrait_simple.json"
+
+[led]
+# 1=rainbow 2=breathing 3=colors 4=off 5=auto
+theme = 2
+# 1=slowest/dimmest  5=fastest/brightest
+speed = 3
+intensity = 3
+
+# ─── Sensor instances ──────────────────────────────────────────────────────────
+
+[[sensors]]
+type = "cpu_usage"
+name = "cpu_usage"
+max_points = 300
+
+[[sensors]]
+type = "cpu_temp"
+name = "cpu_temp"
+max_points = 300
+fahrenheit = false
+
+[[sensors]]
+type = "cpu_power"
+name = "cpu_power"
+max_points = 300
+
+[[sensors]]
+type = "memory"
+name = "memory"
+max_points = 300
+
+[[sensors]]
+type = "network"
+name = "network"
+interface = "enp2s0"
+max_points = 300
+
+[[sensors]]
+type = "space"
+name = "space_root"
+mount = "/"
+max_points = 300
+
+[[sensors]]
+type = "clock"
+name = "clock"
+
+[[sensors]]
+type = "calendar"
+name = "calendar"

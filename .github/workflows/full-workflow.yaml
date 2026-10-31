@@ -1,59 +1,54 @@
 ---
-name: Build and Push a Docker Image and a Python Package
+name: Build and Test
+
 on:
   push:
     branches:
       - main
-env:
-  IMAGE_NAME: acemagic-s1-led-tft-linux
-  REGISTRY: ghcr.io
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  build-and-push:
+  build-and-test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-          cache: pip
-      - name: Build python package
+
+      - name: Install system dependencies
         run: |
-          python --version ; pip --version  # For debugging
-          pip install virtualenv
-          virtualenv venv
-          source venv/bin/activate
-          python -m pip install --upgrade pip twine build pytest httpx pytest-asyncio
-          python -m build
-      - name: Test python package
-        run: |
-          python --version ; pip --version  # For debugging
-          source venv/bin/activate
-          python -m pip install -e .
-          pytest tests
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+          sudo apt-get update -q
+          sudo apt-get install -y libudev-dev libusb-1.0-0-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
+          components: clippy
+
+      - name: Cache Cargo registry and build
+        uses: actions/cache@v4
         with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:rc-release
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          build-args: |
-            COMMIT_HASH=${{ github.sha }}
-            CREATED="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check
+        run: cargo check
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: acemagic-s1-linux-amd64
+          path: target/release/acemagic-s1
+          if-no-files-found: error

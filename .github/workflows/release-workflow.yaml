@@ -1,24 +1,51 @@
 ---
-name: Create a release
+name: Release
+
 on:
   push:
     tags:
       - "v*.*.*"
-env:
-  IMAGE_NAME: acemagic-s1-led-tft-linux
+
 jobs:
-  build-and-push:
+  build-and-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Create Release
-        id: create_release
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y libudev-dev libusb-1.0-0-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Create release archive
+        run: |
+          cp target/release/acemagic-s1 .
+          tar czf acemagic-s1-${{ github.ref_name }}-linux-amd64.tar.gz \
+            acemagic-s1 config.toml themes/
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
+          files: acemagic-s1-${{ github.ref_name }}-linux-amd64.tar.gz

@@ -23,7 +23,7 @@ impl SpaceSensor {
     fn read_disk(mount: &str) -> (u64, u64, u64) {
         #[cfg(target_os = "linux")]
         if let Ok(stat) = nix::sys::statvfs::statvfs(mount) {
-            let bsize = stat.block_size() as u64;
+            let bsize = stat.block_size();
             let total = stat.blocks() * bsize;
             let free = stat.blocks_free() * bsize;
             return (total, free, total.saturating_sub(free));

@@ -1,7 +1,7 @@
+use super::history::History;
+use super::{Sensor, SensorReading};
 use std::fs;
 use std::time::Instant;
-use super::{apply_format, Sensor, SensorReading};
-use super::history::History;
 
 pub struct CpuPowerSensor {
     history: History,
@@ -18,6 +18,13 @@ impl CpuPowerSensor {
             prev_time: Instant::now(),
             max_watts: 28.0,
         }
+    }
+
+    pub fn compute_watts(delta_uj: u64, elapsed_secs: f64) -> f64 {
+        if elapsed_secs <= 0.0 {
+            return 0.0;
+        }
+        delta_uj as f64 / 1_000_000.0 / elapsed_secs
     }
 
     fn read_total_energy_uj() -> u64 {
@@ -40,14 +47,13 @@ impl Sensor for CpuPowerSensor {
         "cpu_power"
     }
 
-    fn sample(&mut self, _rate_ms: u64, format: &str) -> SensorReading {
+    fn sample(&mut self, _rate_ms: u64) -> SensorReading {
         let now = Instant::now();
         let energy = Self::read_total_energy_uj();
         let elapsed = now.duration_since(self.prev_time).as_secs_f64();
 
-        let watts = if elapsed > 0.0 && self.prev_energy_uj > 0 {
-            let delta_uj = energy.saturating_sub(self.prev_energy_uj) as f64;
-            (delta_uj / 1_000_000.0) / elapsed
+        let watts = if self.prev_energy_uj > 0 {
+            Self::compute_watts(energy.saturating_sub(self.prev_energy_uj), elapsed)
         } else {
             0.0
         };
@@ -56,13 +62,37 @@ impl Sensor for CpuPowerSensor {
         self.prev_time = now;
         self.history.push(watts);
 
-        let f0 = format!("{:.1}", watts);
-        let f1 = self.history.join_csv();
-        let value = apply_format(format, &[&f0, &f1]);
-        SensorReading {
-            value,
-            min: 0.0,
-            max: self.max_watts,
-        }
+        SensorReading::new(
+            vec![
+                format!("{:.1}", watts), // {0} watts
+                self.history.join_csv(), // {1} CSV history
+            ],
+            0.0,
+            self.max_watts,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compute_watts_basic() {
+        // 1 million µJ over 1 second = 1 W
+        assert!((CpuPowerSensor::compute_watts(1_000_000, 1.0) - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn compute_watts_zero_elapsed() {
+        assert_eq!(CpuPowerSensor::compute_watts(1_000_000, 0.0), 0.0);
+    }
+
+    #[test]
+    fn sample_returns_two_fields() {
+        let mut s = CpuPowerSensor::new(10);
+        let r = s.sample(500);
+        assert_eq!(r.fields.len(), 2);
+        assert_eq!(r.min, 0.0);
     }
 }

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use super::Widget;
 use crate::config::{Color, WidgetConfig};
 use crate::render::canvas::Canvas;
+use std::collections::HashMap;
 
 /// Image widget — displays a PNG or JPEG image.
 /// `value` is the absolute file path to the image.
@@ -11,20 +11,37 @@ pub struct ImageWidget {
 }
 
 impl ImageWidget {
-    pub fn new() -> Self { Self { cache: HashMap::new() } }
+    pub fn new() -> Self {
+        Self {
+            cache: HashMap::new(),
+        }
+    }
 }
 
 impl Widget for ImageWidget {
-    fn name(&self) -> &str { "image" }
+    fn name(&self) -> &str {
+        "image"
+    }
 
-    fn draw(&mut self, canvas: &mut Canvas, value: &str, _min: f64, _max: f64, config: &WidgetConfig) -> bool {
-        if value.is_empty() { return false; }
+    fn draw(
+        &mut self,
+        canvas: &mut Canvas,
+        value: &str,
+        _min: f64,
+        _max: f64,
+        config: &WidgetConfig,
+    ) -> bool {
+        if value.is_empty() {
+            return false;
+        }
 
         let rect = config.rect;
 
         if !self.cache.contains_key(value) {
             match image::open(value) {
-                Ok(img) => { self.cache.insert(value.to_string(), img); }
+                Ok(img) => {
+                    self.cache.insert(value.to_string(), img);
+                }
                 Err(e) => {
                     tracing::warn!("ImageWidget: failed to load {value}: {e}");
                     return false;

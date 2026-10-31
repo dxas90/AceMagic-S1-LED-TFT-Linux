@@ -14,30 +14,46 @@ pub struct LineChartWidget {
 }
 
 impl LineChartWidget {
-    pub fn new() -> Self { Self { last_value: String::new() } }
+    pub fn new() -> Self {
+        Self {
+            last_value: String::new(),
+        }
+    }
 }
 
 impl Widget for LineChartWidget {
-    fn name(&self) -> &str { "line_chart" }
+    fn name(&self) -> &str {
+        "line_chart"
+    }
 
-    fn draw(&mut self, canvas: &mut Canvas, value: &str, min: f64, max: f64, config: &WidgetConfig) -> bool {
+    fn draw(
+        &mut self,
+        canvas: &mut Canvas,
+        value: &str,
+        min: f64,
+        max: f64,
+        config: &WidgetConfig,
+    ) -> bool {
         let changed = value != self.last_value;
-        if !changed && config.refresh == 0 { return false; }
+        if !changed && config.refresh == 0 {
+            return false;
+        }
         self.last_value = value.to_string();
 
-        let rect      = config.rect;
-        let fill_str  = config.get_str("fill",      "#00e600");
-        let bg_str    = config.get_str("outline",   "#000000");
-        let points    = config.get_f64("points",    60.0) as usize;
-        let area      = config.get_bool("area",     false);
+        let rect = config.rect;
+        let fill_str = config.get_str("fill", "#00e600");
+        let bg_str = config.get_str("outline", "#000000");
+        let points = config.get_f64("points", 60.0) as usize;
+        let area = config.get_bool("area", false);
         let thickness = config.get_f64("thickness", 1.0) as f32;
 
         let line_color = Color::from_hex(fill_str).unwrap_or(Color::new(0, 230, 0));
-        let bg_color   = Color::from_hex(bg_str).unwrap_or(Color::BLACK);
+        let bg_color = Color::from_hex(bg_str).unwrap_or(Color::BLACK);
 
         canvas.fill_rect(rect, bg_color);
 
-        let all_values: Vec<f64> = value.split(',')
+        let all_values: Vec<f64> = value
+            .split(',')
             .filter_map(|s| s.trim().parse().ok())
             .collect();
         let data: &[f64] = if all_values.len() > points {
@@ -47,7 +63,9 @@ impl Widget for LineChartWidget {
         };
 
         let n = data.len();
-        if n < 2 { return changed; }
+        if n < 2 {
+            return changed;
+        }
 
         let effective_min = min;
         let effective_max = max.max(effective_min + 1.0);
@@ -57,12 +75,16 @@ impl Widget for LineChartWidget {
         let rw = rect.width as f32;
         let rh = rect.height as f32;
 
-        let pts: Vec<(f32, f32)> = data.iter().enumerate().map(|(i, &v)| {
-            let px = rx + (i as f32 / (n as f32 - 1.0)) * rw;
-            let ratio = ((v as f32 - effective_min as f32) / span).clamp(0.0, 1.0);
-            let py = ry + rh - ratio * rh;
-            (px, py)
-        }).collect();
+        let pts: Vec<(f32, f32)> = data
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| {
+                let px = rx + (i as f32 / (n as f32 - 1.0)) * rw;
+                let ratio = ((v as f32 - effective_min as f32) / span).clamp(0.0, 1.0);
+                let py = ry + rh - ratio * rh;
+                (px, py)
+            })
+            .collect();
 
         if area {
             // Semi-transparent fill color

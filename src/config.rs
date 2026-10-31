@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
 
@@ -12,10 +12,14 @@ pub struct Rect {
 }
 
 impl Rect {
-    pub fn pixel_count(&self) -> u32 { self.width * self.height }
+    pub fn pixel_count(&self) -> u32 {
+        self.width * self.height
+    }
 
     /// True if this rect requires splitting for a partial LCD update (max 2048 px).
-    pub fn needs_split(&self) -> bool { self.pixel_count() > 2048 }
+    pub fn needs_split(&self) -> bool {
+        self.pixel_count() > 2048
+    }
 
     /// Clip this rect to a canvas of given dimensions, returning None if fully outside.
     pub fn clip(&self, canvas_w: u32, canvas_h: u32) -> Option<Rect> {
@@ -23,8 +27,15 @@ impl Rect {
         let y = self.y.max(0) as u32;
         let x2 = (self.x + self.width as i32).min(canvas_w as i32).max(0) as u32;
         let y2 = (self.y + self.height as i32).min(canvas_h as i32).max(0) as u32;
-        if x2 <= x || y2 <= y { return None; }
-        Some(Rect { x: x as i32, y: y as i32, width: x2 - x, height: y2 - y })
+        if x2 <= x || y2 <= y {
+            return None;
+        }
+        Some(Rect {
+            x: x as i32,
+            y: y as i32,
+            width: x2 - x,
+            height: y2 - y,
+        })
     }
 }
 
@@ -39,12 +50,31 @@ pub struct Color {
 }
 
 impl Color {
-    pub const BLACK: Color = Color { r: 0, g: 0, b: 0, a: 255 };
-    pub const WHITE: Color = Color { r: 255, g: 255, b: 255, a: 255 };
-    pub const TRANSPARENT: Color = Color { r: 0, g: 0, b: 0, a: 0 };
+    pub const BLACK: Color = Color {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 255,
+    };
+    pub const WHITE: Color = Color {
+        r: 255,
+        g: 255,
+        b: 255,
+        a: 255,
+    };
+    pub const TRANSPARENT: Color = Color {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 0,
+    };
 
-    pub fn new(r: u8, g: u8, b: u8) -> Self { Self { r, g, b, a: 255 } }
-    pub fn with_alpha(r: u8, g: u8, b: u8, a: u8) -> Self { Self { r, g, b, a } }
+    pub fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b, a: 255 }
+    }
+    pub fn with_alpha(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self { r, g, b, a }
+    }
 
     /// Parse a CSS hex color string (#rgb, #rrggbb, #rrggbbaa).
     pub fn from_hex(s: &str) -> Option<Self> {
@@ -75,9 +105,7 @@ impl Color {
 
     /// Encode as RGB565 big-endian (the format the LCD uses on the wire).
     pub fn to_rgb565_be(self) -> u16 {
-        ((self.r as u16 & 0xF8) << 8)
-            | ((self.g as u16 & 0xFC) << 3)
-            | (self.b as u16 >> 3)
+        ((self.r as u16 & 0xF8) << 8) | ((self.g as u16 & 0xFC) << 3) | (self.b as u16 >> 3)
     }
 
     /// Convert to tiny-skia's Color type.
@@ -88,7 +116,7 @@ impl Color {
 
 // ── TOML AppConfig ────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct AppConfig {
     #[serde(default)]
     pub device: DeviceConfig,
@@ -104,19 +132,6 @@ pub struct AppConfig {
     pub sensors: Vec<SensorInstanceConfig>,
 }
 
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            device: DeviceConfig::default(),
-            display: DisplayConfig::default(),
-            web: WebConfig::default(),
-            theme: ThemeConfig::default(),
-            led: LedConfig::default(),
-            sensors: vec![],
-        }
-    }
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DeviceConfig {
     /// USB HID path string like "1-8:1.1", or "auto" to scan by VID/PID.
@@ -127,7 +142,10 @@ pub struct DeviceConfig {
 
 impl Default for DeviceConfig {
     fn default() -> Self {
-        Self { lcd: "auto".into(), led: "/dev/ttyUSB0".into() }
+        Self {
+            lcd: "auto".into(),
+            led: "/dev/ttyUSB0".into(),
+        }
     }
 }
 
@@ -158,7 +176,11 @@ pub struct WebConfig {
 }
 
 impl Default for WebConfig {
-    fn default() -> Self { Self { listen: "0.0.0.0:8686".into() } }
+    fn default() -> Self {
+        Self {
+            listen: "0.0.0.0:8686".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -168,7 +190,9 @@ pub struct ThemeConfig {
 
 impl Default for ThemeConfig {
     fn default() -> Self {
-        Self { file: "themes/simple_demo/portrait_simple.json".into() }
+        Self {
+            file: "themes/simple_demo/portrait_simple.json".into(),
+        }
     }
 }
 
@@ -181,7 +205,13 @@ pub struct LedConfig {
 }
 
 impl Default for LedConfig {
-    fn default() -> Self { Self { theme: 2, speed: 3, intensity: 3 } }
+    fn default() -> Self {
+        Self {
+            theme: 2,
+            speed: 3,
+            intensity: 3,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -204,7 +234,9 @@ pub struct Theme {
 }
 
 impl Theme {
-    pub fn is_portrait(&self) -> bool { self.orientation == "portrait" }
+    pub fn is_portrait(&self) -> bool {
+        self.orientation == "portrait"
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -257,19 +289,30 @@ pub struct WidgetConfig {
 
 impl WidgetConfig {
     pub fn get_str<'a>(&'a self, key: &str, default: &'a str) -> &'a str {
-        self.extra.get(key).and_then(|v| v.as_str()).unwrap_or(default)
+        self.extra
+            .get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or(default)
     }
 
     pub fn get_f64(&self, key: &str, default: f64) -> f64 {
-        self.extra.get(key).and_then(|v| v.as_f64()).unwrap_or(default)
+        self.extra
+            .get(key)
+            .and_then(|v| v.as_f64())
+            .unwrap_or(default)
     }
 
     pub fn get_bool(&self, key: &str, default: bool) -> bool {
-        self.extra.get(key).and_then(|v| v.as_bool()).unwrap_or(default)
+        self.extra
+            .get(key)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(default)
     }
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 // ── Split large rects into ≤2048-pixel sub-rects ──────────────────────────────
 
@@ -283,8 +326,8 @@ pub fn split_update_region(rect: Rect) -> Vec<Rect> {
     let sq = (MAX_PIXELS as f64).sqrt();
     let rows = (rect.height as f64 / sq).ceil() as u32;
     let cols = (rect.width as f64 / sq).ceil() as u32;
-    let aw = (rect.width + cols - 1) / cols;
-    let ah = (rect.height + rows - 1) / rows;
+    let aw = rect.width.div_ceil(cols);
+    let ah = rect.height.div_ceil(rows);
     let mut result = Vec::new();
     for row in 0..rows {
         for col in 0..cols {
@@ -296,7 +339,12 @@ pub fn split_update_region(rect: Rect) -> Vec<Rect> {
             let w = (x2 - x).max(0) as u32;
             let h = (y2 - y).max(0) as u32;
             if w > 0 && h > 0 {
-                result.push(Rect { x, y, width: w, height: h });
+                result.push(Rect {
+                    x,
+                    y,
+                    width: w,
+                    height: h,
+                });
             }
         }
     }
@@ -325,14 +373,24 @@ mod tests {
 
     #[test]
     fn split_region_small() {
-        let r = Rect { x: 0, y: 0, width: 40, height: 40 };
+        let r = Rect {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 40,
+        };
         let rects = split_update_region(r);
         assert_eq!(rects.len(), 1);
     }
 
     #[test]
     fn split_region_large() {
-        let r = Rect { x: 0, y: 0, width: 320, height: 170 };
+        let r = Rect {
+            x: 0,
+            y: 0,
+            width: 320,
+            height: 170,
+        };
         let rects = split_update_region(r);
         for sr in &rects {
             assert!(sr.pixel_count() <= 2048, "sub-rect too large: {sr:?}");
@@ -344,7 +402,12 @@ mod tests {
 
     #[test]
     fn rect_clip() {
-        let r = Rect { x: -10, y: -10, width: 50, height: 50 };
+        let r = Rect {
+            x: -10,
+            y: -10,
+            width: 50,
+            height: 50,
+        };
         let clipped = r.clip(320, 170).unwrap();
         assert_eq!(clipped.x, 0);
         assert_eq!(clipped.y, 0);

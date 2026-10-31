@@ -1,17 +1,17 @@
 //! Application state and main draw loop.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use tokio::sync::{Mutex, RwLock, mpsc};
+use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio::time::interval;
 use tracing::{debug, warn};
 
-use crate::config::{AppConfig, Theme, Screen, Color, Rect, split_update_region};
-use crate::hardware::lcd::{LcdDevice, pixmap_to_rgb565, translate_rect_portrait};
-use crate::hardware::led::{LedDevice, LedCommand};
+use crate::config::{split_update_region, AppConfig, Color, Rect, Screen, Theme};
+use crate::hardware::lcd::{pixmap_to_rgb565, translate_rect_portrait, LcdDevice};
+use crate::hardware::led::{LedCommand, LedDevice};
 
 /// Messages sent over the LCD channel to the hardware worker thread.
 pub enum LcdCommand {
@@ -123,7 +123,9 @@ impl DrawLoop {
 
         // Rotate screen if duration expired
         let screens: Vec<&Screen> = theme.screens.iter().filter(|s| s.enabled).collect();
-        if screens.is_empty() { return; }
+        if screens.is_empty() {
+            return;
+        }
         let idx = self.state.screen_index.load(Ordering::Relaxed) % screens.len();
         let screen = screens[idx];
 
@@ -144,17 +146,25 @@ impl DrawLoop {
         // Draw widgets onto canvas
         let force_redraw = self.state.redraw_want.load(Ordering::SeqCst)
             > self.state.redraw_done.load(Ordering::SeqCst);
-        let dirty_rects = self.draw_screen(screen, &readings, force_redraw, is_portrait).await;
+        let dirty_rects = self
+            .draw_screen(screen, &readings, force_redraw, is_portrait)
+            .await;
 
         if force_redraw {
             self.state.redraw_done.fetch_add(1, Ordering::SeqCst);
         }
 
-        if dirty_rects.is_empty() && !force_redraw { return; }
+        if dirty_rects.is_empty() && !force_redraw {
+            return;
+        }
 
         // Apply per-screen LED config if present
         if let Some(ref led_cfg) = screen.led_config {
-            let cmd = LedCommand { theme: led_cfg.theme, intensity: led_cfg.intensity, speed: led_cfg.speed };
+            let cmd = LedCommand {
+                theme: led_cfg.theme,
+                intensity: led_cfg.intensity,
+                speed: led_cfg.speed,
+            };
             let _ = self.state.led_tx.try_send(cmd);
         }
 
@@ -174,8 +184,17 @@ impl DrawLoop {
                 };
                 // Extract pixels for this rect from the canvas
                 for sub in split_update_region(phys_rect) {
-                    let pixels = extract_rect_pixels(canvas.data(), canvas.width(), sub, is_portrait, canvas.data());
-                    let _ = self.state.lcd_tx.try_send(LcdCommand::PartialUpdate(sub, pixels));
+                    let pixels = extract_rect_pixels(
+                        canvas.data(),
+                        canvas.width(),
+                        sub,
+                        is_portrait,
+                        canvas.data(),
+                    );
+                    let _ = self
+                        .state
+                        .lcd_tx
+                        .try_send(LcdCommand::PartialUpdate(sub, pixels));
                 }
             }
         }
@@ -186,7 +205,7 @@ impl DrawLoop {
         sensors
             .iter_mut()
             .map(|(name, sensor)| {
-                let reading = sensor.sample(poll_ms, "");
+                let reading = sensor.sample(poll_ms);
                 (name.clone(), reading)
             })
             .collect()
@@ -216,7 +235,7 @@ impl DrawLoop {
             let value = if widget_cfg.sensor {
                 readings
                     .get(&widget_cfg.value)
-                    .map(|r| r.value.clone())
+                    .map(|r| r.format(&widget_cfg.format))
                     .unwrap_or_default()
             } else {
                 widget_cfg.value.clone()
@@ -230,16 +249,15 @@ impl DrawLoop {
                 (0.0, 100.0)
             };
 
-            let widget = self
-                .widget_cache
-                .entry(widget_cfg.id)
-                .or_insert_with(|| {
-                    crate::render::widgets::create_widget(&widget_cfg.name)
-                        .unwrap_or_else(|| {
-                            warn!("Unknown widget type: {}, falling back to text", widget_cfg.name);
-                            Box::new(crate::render::widgets::text::TextWidget::new())
-                        })
-                });
+            let widget = self.widget_cache.entry(widget_cfg.id).or_insert_with(|| {
+                crate::render::widgets::create_widget(&widget_cfg.name).unwrap_or_else(|| {
+                    warn!(
+                        "Unknown widget type: {}, falling back to text",
+                        widget_cfg.name
+                    );
+                    Box::new(crate::render::widgets::text::TextWidget::new())
+                })
+            });
 
             let changed = widget.draw(&mut canvas, &value, min, max, widget_cfg);
             if changed || force_redraw {
@@ -297,7 +315,10 @@ fn extract_rect_pixels(
                 let ly = (rect.x + col as i32) as usize;
                 (lx, ly)
             } else {
-                ((rect.x as usize + col as usize), (rect.y as usize + row as usize))
+                (
+                    (rect.x as usize + col as usize),
+                    (rect.y as usize + row as usize),
+                )
             };
             let off = cy * stride + cx * 4;
             if off + 3 < data.len() {
@@ -324,12 +345,15 @@ pub fn load_theme(path: &str) -> crate::error::Result<Theme> {
 
 pub fn save_config(config: &AppConfig, path: &str) -> crate::error::Result<()> {
     use std::io::Write;
-    let content = toml::to_string_pretty(config)
-        .map_err(|e| crate::error::Error::Config(e.to_string()))?;
+    let content =
+        toml::to_string_pretty(config).map_err(|e| crate::error::Error::Config(e.to_string()))?;
     // Atomic write via tempfile in same directory
-    let dir = std::path::Path::new(path).parent().unwrap_or(std::path::Path::new("."));
+    let dir = std::path::Path::new(path)
+        .parent()
+        .unwrap_or(std::path::Path::new("."));
     let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
     tmp.write_all(content.as_bytes())?;
-    tmp.persist(path).map_err(|e| crate::error::Error::Io(e.error))?;
+    tmp.persist(path)
+        .map_err(|e| crate::error::Error::Io(e.error))?;
     Ok(())
 }

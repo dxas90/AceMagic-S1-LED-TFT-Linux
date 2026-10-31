@@ -1,5 +1,5 @@
-use super::{apply_format, Sensor, SensorReading};
 use super::history::History;
+use super::{Sensor, SensorReading};
 
 pub struct SpaceSensor {
     mount_point: String,
@@ -22,21 +22,26 @@ impl SpaceSensor {
 
     fn read_disk(mount: &str) -> (u64, u64, u64) {
         #[cfg(target_os = "linux")]
-        {
-            if let Ok(stat) = nix::sys::statvfs::statvfs(mount) {
-                let bsize = stat.block_size() as u64;
-                let total = stat.blocks()      * bsize;
-                let free  = stat.blocks_free() * bsize;
-                let used  = total.saturating_sub(free);
-                return (total, free, used);
-            }
+        if let Ok(stat) = nix::sys::statvfs::statvfs(mount) {
+            let bsize = stat.block_size() as u64;
+            let total = stat.blocks() * bsize;
+            let free = stat.blocks_free() * bsize;
+            return (total, free, total.saturating_sub(free));
         }
         let _ = mount;
         (0, 0, 0)
     }
 
-    fn fmt_mib(bytes: u64) -> String {
+    pub fn fmt_mib(bytes: u64) -> String {
         format!("{:.0}", bytes as f64 / (1024.0 * 1024.0))
+    }
+
+    pub fn pct(n: u64, d: u64) -> f64 {
+        if d > 0 {
+            n as f64 / d as f64 * 100.0
+        } else {
+            0.0
+        }
     }
 }
 
@@ -45,32 +50,59 @@ impl Sensor for SpaceSensor {
         &self.sensor_name
     }
 
-    fn sample(&mut self, _rate_ms: u64, format: &str) -> SensorReading {
+    fn sample(&mut self, _rate_ms: u64) -> SensorReading {
         let (total, free, used) = Self::read_disk(&self.mount_point);
-
-        let free_pct = if total > 0 { free as f64 / total as f64 * 100.0 } else { 0.0 };
-        let used_pct = if total > 0 { used as f64 / total as f64 * 100.0 } else { 0.0 };
+        let free_pct = Self::pct(free, total);
+        let used_pct = Self::pct(used, total);
 
         self.free_history.push(free_pct);
         self.used_history.push(used_pct);
 
         // Tokens matching space.js (0-8):
-        // {0} mount point  {1} free% history  {2} used% history
-        // {3} last free%   {4} last used%
-        // {5} free MiB     {6} used MiB        {7} total MiB   {8} "MiB"
-        let fields: [String; 9] = [
-            self.mount_point.clone(),
-            self.free_history.join_csv(),
-            self.used_history.join_csv(),
-            format!("{:.1}", free_pct),
-            format!("{:.1}", used_pct),
-            Self::fmt_mib(free),
-            Self::fmt_mib(used),
-            Self::fmt_mib(total),
-            "MiB".to_string(),
-        ];
-        let refs: Vec<&str> = fields.iter().map(|s| s.as_str()).collect();
-        let value = apply_format(format, &refs);
-        SensorReading { value, min: 0.0, max: 100.0 }
+        // {0} mount  {1} free% csv  {2} used% csv
+        // {3} free%  {4} used%      {5} free MiB
+        // {6} used MiB  {7} total MiB  {8} "MiB"
+        SensorReading::new(
+            vec![
+                self.mount_point.clone(),
+                self.free_history.join_csv(),
+                self.used_history.join_csv(),
+                format!("{:.1}", free_pct),
+                format!("{:.1}", used_pct),
+                Self::fmt_mib(free),
+                Self::fmt_mib(used),
+                Self::fmt_mib(total),
+                "MiB".to_string(),
+            ],
+            0.0,
+            100.0,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pct_basic() {
+        assert!((SpaceSensor::pct(50, 100) - 50.0).abs() < 0.01);
+        assert_eq!(SpaceSensor::pct(0, 0), 0.0);
+    }
+
+    #[test]
+    fn fmt_mib_converts() {
+        // 1 MiB = 1,048,576 bytes → "1"
+        assert_eq!(SpaceSensor::fmt_mib(1024 * 1024), "1");
+        assert_eq!(SpaceSensor::fmt_mib(0), "0");
+    }
+
+    #[test]
+    fn sample_returns_nine_fields() {
+        let mut s = SpaceSensor::new("root", "/", 10);
+        let r = s.sample(500);
+        assert_eq!(r.fields.len(), 9);
+        assert_eq!(r.fields[0], "/");
+        assert_eq!(r.fields[8], "MiB");
     }
 }

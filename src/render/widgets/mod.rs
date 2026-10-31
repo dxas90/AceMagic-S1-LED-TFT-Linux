@@ -1,5 +1,5 @@
-use crate::config::WidgetConfig;
 use super::canvas::Canvas;
+use crate::config::WidgetConfig;
 
 pub trait Widget: Send + Sync {
     fn name(&self) -> &str;
@@ -25,14 +25,14 @@ pub mod weather_icon;
 
 pub fn create_widget(name: &str) -> Option<Box<dyn Widget>> {
     match name {
-        "text"          => Some(Box::new(text::TextWidget::new())),
-        "custom_bar"    => Some(Box::new(custom_bar::CustomBarWidget::new())),
-        "bar_chart"     => Some(Box::new(bar_chart::BarChartWidget::new())),
-        "line_chart"    => Some(Box::new(line_chart::LineChartWidget::new())),
-        "doughnut"      => Some(Box::new(doughnut::DoughnutWidget::new())),
-        "image"         => Some(Box::new(image_widget::ImageWidget::new())),
-        "iconify"       => Some(Box::new(iconify::IconifyWidget::new())),
-        "weather_icon"  => Some(Box::new(weather_icon::WeatherIconWidget::new())),
+        "text" => Some(Box::new(text::TextWidget::new())),
+        "custom_bar" => Some(Box::new(custom_bar::CustomBarWidget::new())),
+        "bar_chart" => Some(Box::new(bar_chart::BarChartWidget::new())),
+        "line_chart" => Some(Box::new(line_chart::LineChartWidget::new())),
+        "doughnut" => Some(Box::new(doughnut::DoughnutWidget::new())),
+        "image" => Some(Box::new(image_widget::ImageWidget::new())),
+        "iconify" => Some(Box::new(iconify::IconifyWidget::new())),
+        "weather_icon" => Some(Box::new(weather_icon::WeatherIconWidget::new())),
         _ => None,
     }
 }

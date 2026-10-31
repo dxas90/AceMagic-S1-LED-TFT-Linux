@@ -1,7 +1,7 @@
+use super::history::History;
+use super::{Sensor, SensorReading};
 use std::fs;
 use std::path::PathBuf;
-use super::{apply_format, Sensor, SensorReading};
-use super::history::History;
 
 pub struct CpuTempSensor {
     history: History,
@@ -35,10 +35,9 @@ impl CpuTempSensor {
             if !name.trim().starts_with("coretemp") {
                 continue;
             }
-            // Walk tempN_label looking for "Package id 0"
             for i in 1..=32u32 {
-                let label = fs::read_to_string(base.join(format!("temp{i}_label")))
-                    .unwrap_or_default();
+                let label =
+                    fs::read_to_string(base.join(format!("temp{i}_label"))).unwrap_or_default();
                 if label.trim() == "Package id 0" {
                     return Some(base.join(format!("temp{i}_input")));
                 }
@@ -55,8 +54,11 @@ impl CpuTempSensor {
             return 0.0;
         };
         let raw = fs::read_to_string(path).unwrap_or_default();
-        let millideg: f64 = raw.trim().parse().unwrap_or(0.0);
-        millideg / 1000.0
+        raw.trim().parse::<f64>().unwrap_or(0.0) / 1000.0
+    }
+
+    pub fn celsius_to_fahrenheit(c: f64) -> f64 {
+        c * 9.0 / 5.0 + 32.0
     }
 }
 
@@ -65,22 +67,52 @@ impl Sensor for CpuTempSensor {
         "cpu_temp"
     }
 
-    fn sample(&mut self, _rate_ms: u64, format: &str) -> SensorReading {
+    fn sample(&mut self, _rate_ms: u64) -> SensorReading {
         let celsius = self.read_temp_celsius();
         let temp = if self.fahrenheit {
-            celsius * 9.0 / 5.0 + 32.0
+            Self::celsius_to_fahrenheit(celsius)
         } else {
             celsius
         };
         self.history.push(temp);
         let unit = if self.fahrenheit { "F" } else { "C" };
-        let f0 = format!("{:.1}", temp);
-        let f1 = self.history.join_csv();
-        let value = apply_format(format, &[&f0, &f1, unit]);
-        SensorReading {
-            value,
-            min: self.min_temp,
-            max: self.max_temp,
-        }
+        SensorReading::new(
+            vec![
+                format!("{:.1}", temp),  // {0} temperature value
+                self.history.join_csv(), // {1} CSV history
+                unit.to_string(),        // {2} unit (C or F)
+            ],
+            self.min_temp,
+            self.max_temp,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn celsius_to_fahrenheit() {
+        assert!((CpuTempSensor::celsius_to_fahrenheit(0.0) - 32.0).abs() < 0.01);
+        assert!((CpuTempSensor::celsius_to_fahrenheit(100.0) - 212.0).abs() < 0.01);
+        assert!((CpuTempSensor::celsius_to_fahrenheit(37.0) - 98.6).abs() < 0.1);
+    }
+
+    #[test]
+    fn sample_returns_three_fields() {
+        let mut s = CpuTempSensor::new(10, false);
+        let r = s.sample(500);
+        assert_eq!(r.fields.len(), 3);
+        assert_eq!(r.fields[2], "C");
+    }
+
+    #[test]
+    fn fahrenheit_unit_field() {
+        let mut s = CpuTempSensor::new(10, true);
+        let r = s.sample(500);
+        assert_eq!(r.fields[2], "F");
+        assert_eq!(r.min, 70.0);
+        assert_eq!(r.max, 230.0);
     }
 }

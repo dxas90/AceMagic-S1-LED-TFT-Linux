@@ -13,7 +13,7 @@ use std::time::Duration;
 
 pub const LED_VID: u16 = 0x1A86;
 pub const LED_PID: u16 = 0x7523;
-const LED_BAUD:    u32 = 10_000;
+const LED_BAUD: u32 = 10_000;
 
 const MAGIC_HEADER: u8 = 0xFA;
 const INTER_BYTE_MS: u64 = 5;
@@ -21,11 +21,11 @@ const INTER_BYTE_MS: u64 = 5;
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u8)]
 pub enum LedTheme {
-    Rainbow   = 1,
+    Rainbow = 1,
     Breathing = 2,
-    Colors    = 3,
-    Off       = 4,
-    Auto      = 5,
+    Colors = 3,
+    Off = 4,
+    Auto = 5,
 }
 
 impl LedTheme {
@@ -43,9 +43,9 @@ impl LedTheme {
 
 #[derive(Debug, Clone, Copy)]
 pub struct LedCommand {
-    pub theme:     u8,  // LedTheme as u8
-    pub intensity: u8,  // user-facing 1-5 scale
-    pub speed:     u8,  // user-facing 1-5 scale
+    pub theme: u8,     // LedTheme as u8
+    pub intensity: u8, // user-facing 1-5 scale
+    pub speed: u8,     // user-facing 1-5 scale
 }
 
 /// Invert the user-facing 1–5 scale to the hardware wire value.
@@ -76,8 +76,16 @@ impl LedDevice {
     /// the timing the CH340 firmware expects at this non-standard baud rate.
     pub fn send(&mut self, cmd: LedCommand) -> crate::error::Result<()> {
         let theme = cmd.theme;
-        let fi = if theme == LedTheme::Off as u8 { 5 } else { fix_value(cmd.intensity) };
-        let fs = if theme == LedTheme::Off as u8 { 5 } else { fix_value(cmd.speed) };
+        let fi = if theme == LedTheme::Off as u8 {
+            5
+        } else {
+            fix_value(cmd.intensity)
+        };
+        let fs = if theme == LedTheme::Off as u8 {
+            5
+        } else {
+            fix_value(cmd.speed)
+        };
 
         let checksum = MAGIC_HEADER
             .wrapping_add(theme)
@@ -119,7 +127,10 @@ mod tests {
         let theme: u8 = 2;
         let fi: u8 = fix_value(3);
         let fs: u8 = fix_value(3);
-        let checksum = MAGIC_HEADER.wrapping_add(theme).wrapping_add(fi).wrapping_add(fs);
+        let checksum = MAGIC_HEADER
+            .wrapping_add(theme)
+            .wrapping_add(fi)
+            .wrapping_add(fs);
         // 0xFA + 2 + 3 + 3 = 258 = 0x02
         assert_eq!(checksum, 2u8);
     }

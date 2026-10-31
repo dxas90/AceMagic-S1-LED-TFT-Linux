@@ -8,29 +8,45 @@ pub struct BarChartWidget {
 }
 
 impl BarChartWidget {
-    pub fn new() -> Self { Self { last_value: String::new() } }
+    pub fn new() -> Self {
+        Self {
+            last_value: String::new(),
+        }
+    }
 }
 
 impl Widget for BarChartWidget {
-    fn name(&self) -> &str { "bar_chart" }
+    fn name(&self) -> &str {
+        "bar_chart"
+    }
 
-    fn draw(&mut self, canvas: &mut Canvas, value: &str, min: f64, max: f64, config: &WidgetConfig) -> bool {
+    fn draw(
+        &mut self,
+        canvas: &mut Canvas,
+        value: &str,
+        min: f64,
+        max: f64,
+        config: &WidgetConfig,
+    ) -> bool {
         let changed = value != self.last_value;
-        if !changed && config.refresh == 0 { return false; }
+        if !changed && config.refresh == 0 {
+            return false;
+        }
         self.last_value = value.to_string();
 
-        let rect       = config.rect;
-        let fill_str   = config.get_str("fill",       "#00e600");
-        let bg_str     = config.get_str("outline",    "#000000");
-        let points     = config.get_f64("points",     10.0) as usize;
+        let rect = config.rect;
+        let fill_str = config.get_str("fill", "#00e600");
+        let bg_str = config.get_str("outline", "#000000");
+        let points = config.get_f64("points", 10.0) as usize;
         let horizontal = config.get_bool("horizontal", false);
 
         let fill_color = Color::from_hex(fill_str).unwrap_or(Color::new(0, 230, 0));
-        let bg_color   = Color::from_hex(bg_str).unwrap_or(Color::BLACK);
+        let bg_color = Color::from_hex(bg_str).unwrap_or(Color::BLACK);
 
         canvas.fill_rect(rect, bg_color);
 
-        let all_values: Vec<f64> = value.split(',')
+        let all_values: Vec<f64> = value
+            .split(',')
             .filter_map(|s| s.trim().parse().ok())
             .collect();
         let data: &[f64] = if all_values.len() > points {
@@ -40,7 +56,9 @@ impl Widget for BarChartWidget {
         };
 
         let n = data.len();
-        if n == 0 { return changed; }
+        if n == 0 {
+            return changed;
+        }
 
         let effective_min = min;
         let effective_max = max.max(effective_min + 1.0);
@@ -51,19 +69,39 @@ impl Widget for BarChartWidget {
             for (i, &v) in data.iter().enumerate() {
                 let ratio = ((v - effective_min) / span).clamp(0.0, 1.0);
                 let h = (ratio * rect.height as f64).round() as u32;
-                if h == 0 { continue; }
+                if h == 0 {
+                    continue;
+                }
                 let x = rect.x + (i as u32 * bar_w) as i32;
                 let y = rect.y + (rect.height - h) as i32;
-                canvas.fill_rect(Rect { x, y, width: bar_w.saturating_sub(1), height: h }, fill_color);
+                canvas.fill_rect(
+                    Rect {
+                        x,
+                        y,
+                        width: bar_w.saturating_sub(1),
+                        height: h,
+                    },
+                    fill_color,
+                );
             }
         } else {
             let bar_h = ((rect.height as f64 / n as f64).floor() as u32).max(1);
             for (i, &v) in data.iter().enumerate() {
                 let ratio = ((v - effective_min) / span).clamp(0.0, 1.0);
                 let w = (ratio * rect.width as f64).round() as u32;
-                if w == 0 { continue; }
+                if w == 0 {
+                    continue;
+                }
                 let y = rect.y + (i as u32 * bar_h) as i32;
-                canvas.fill_rect(Rect { x: rect.x, y, width: w, height: bar_h.saturating_sub(1) }, fill_color);
+                canvas.fill_rect(
+                    Rect {
+                        x: rect.x,
+                        y,
+                        width: w,
+                        height: bar_h.saturating_sub(1),
+                    },
+                    fill_color,
+                );
             }
         }
 

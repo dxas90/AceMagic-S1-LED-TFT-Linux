@@ -6,14 +6,60 @@ on:
     tags:
       - "v*.*.*"
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  build-and-release:
+  # ── Quality gates (must pass before release) ──────────────────────────────────
+  check:
+    name: Format & Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y libudev-dev libusb-1.0-0-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  test:
+    name: Test
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y libudev-dev libusb-1.0-0-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
+        run: cargo test --all-features
+
+  # ── Release build + publish ───────────────────────────────────────────────────
+  release:
+    name: Release ${{ github.ref_name }}
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install system dependencies
         run: |
@@ -40,6 +86,8 @@ jobs:
           cp target/release/acemagic-s1 .
           tar czf acemagic-s1-${{ github.ref_name }}-linux-amd64.tar.gz \
             acemagic-s1 config.toml themes/
+          sha256sum acemagic-s1-${{ github.ref_name }}-linux-amd64.tar.gz \
+            > acemagic-s1-${{ github.ref_name }}-linux-amd64.tar.gz.sha256
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -48,4 +96,7 @@ jobs:
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
-          files: acemagic-s1-${{ github.ref_name }}-linux-amd64.tar.gz
+          generate_release_notes: true
+          files: |
+            acemagic-s1-${{ github.ref_name }}-linux-amd64.tar.gz
+            acemagic-s1-${{ github.ref_name }}-linux-amd64.tar.gz.sha256

@@ -7,24 +7,24 @@
 //! - Full redraw = 27 sequential chunks (26 × 4096 bytes + 1 × 2304 bytes)
 //! - Partial update = dirty-rect command, max 2048 pixels per call
 
-use hidapi::{HidApi, HidDevice};
 use crate::config::Rect;
+use hidapi::{HidApi, HidDevice};
 
 pub const LCD_VID: u16 = 0x04D9;
 pub const LCD_PID: u16 = 0xFD01;
 
-const REPORT_SIZE: usize = 1;     // HID report ID byte (always 0x00)
+const REPORT_SIZE: usize = 1; // HID report ID byte (always 0x00)
 const HEADER_SIZE: usize = 8;
-const DATA_SIZE:   usize = 4096;
+const DATA_SIZE: usize = 4096;
 const BUFFER_SIZE: usize = REPORT_SIZE + HEADER_SIZE + DATA_SIZE; // 4105
 
-const SIGNATURE:   u8 = 0x55;
-const CMD_CONFIG:  u8 = 0xA1;  // orientation + heartbeat
-const CMD_REFRESH: u8 = 0xA2;  // partial dirty-rect update
-const CMD_REDRAW:  u8 = 0xA3;  // full-screen redraw
+const SIGNATURE: u8 = 0x55;
+const CMD_CONFIG: u8 = 0xA1; // orientation + heartbeat
+const CMD_REFRESH: u8 = 0xA2; // partial dirty-rect update
+const CMD_REDRAW: u8 = 0xA3; // full-screen redraw
 
-const CHUNK_COUNT:      usize = 27;
-const FINAL_CHUNK_IDX:  usize = CHUNK_COUNT - 1;
+const CHUNK_COUNT: usize = 27;
+const FINAL_CHUNK_IDX: usize = CHUNK_COUNT - 1;
 const FINAL_CHUNK_SIZE: usize = 2304; // bytes in last chunk (1152 pixels × 2)
 
 pub struct LcdDevice {
@@ -122,25 +122,32 @@ impl LcdDevice {
 
         for idx in 0..CHUNK_COUNT {
             let sub_cmd: u8 = match idx {
-                0               => 0xF0, // LCD_REDRAW_START
+                0 => 0xF0,               // LCD_REDRAW_START
                 FINAL_CHUNK_IDX => 0xF2, // LCD_REDRAW_END
-                _               => 0xF1, // LCD_REDRAW_CONTINUE
+                _ => 0xF1,               // LCD_REDRAW_CONTINUE
             };
-            let chunk_bytes = if idx < FINAL_CHUNK_IDX { DATA_SIZE } else { FINAL_CHUNK_SIZE };
+            let chunk_bytes = if idx < FINAL_CHUNK_IDX {
+                DATA_SIZE
+            } else {
+                FINAL_CHUNK_SIZE
+            };
             let pixel_start = idx * DATA_SIZE / 2;
             let pixel_count = chunk_bytes / 2;
 
             buf[3] = sub_cmd;
             buf[4] = (idx + 1) as u8; // 1-based sequence number (0x01 .. 0x1B)
-            // Byte offset of this chunk in the full framebuffer (big-endian u16).
-            // Firmware ignores this and uses the sequence number, but we send it anyway.
+                                      // Byte offset of this chunk in the full framebuffer (big-endian u16).
+                                      // Firmware ignores this and uses the sequence number, but we send it anyway.
             let offset = (idx * DATA_SIZE) as u16;
             buf[6..8].copy_from_slice(&offset.to_be_bytes());
 
             let data_start = REPORT_SIZE + HEADER_SIZE;
             // Zero leftover bytes from previous chunk
             buf[data_start..].fill(0);
-            for (i, &px) in pixels[pixel_start..pixel_start + pixel_count].iter().enumerate() {
+            for (i, &px) in pixels[pixel_start..pixel_start + pixel_count]
+                .iter()
+                .enumerate()
+            {
                 let off = data_start + i * 2;
                 buf[off..off + 2].copy_from_slice(&px.to_be_bytes());
             }
@@ -235,7 +242,12 @@ mod tests {
     #[test]
     fn portrait_rect_translate() {
         // Widget at x=10, y=20, w=30, h=40 on a 170-high canvas
-        let r = Rect { x: 10, y: 20, width: 30, height: 40 };
+        let r = Rect {
+            x: 10,
+            y: 20,
+            width: 30,
+            height: 40,
+        };
         let t = translate_rect_portrait(r, 170);
         assert_eq!(t.x, 20);
         assert_eq!(t.y, 170 - (10 + 30)); // 130

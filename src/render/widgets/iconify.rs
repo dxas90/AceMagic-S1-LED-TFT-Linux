@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
 use super::Widget;
 use crate::config::{Color, WidgetConfig};
 use crate::render::canvas::Canvas;
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Renders an SVG icon from the Iconify CDN.
 /// `value` is the icon name (without set prefix), e.g. "cpu".
@@ -19,14 +19,19 @@ pub struct IconifyWidget {
 
 impl IconifyWidget {
     pub fn new() -> Self {
-        Self { svg_cache: HashMap::new() }
+        Self {
+            svg_cache: HashMap::new(),
+        }
     }
 
     fn cache_dir(set: &str) -> PathBuf {
         let base = std::env::var("HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("/tmp"));
-        base.join(".cache").join("acemagic-s1").join("icons").join(set)
+        base.join(".cache")
+            .join("acemagic-s1")
+            .join("icons")
+            .join(set)
     }
 
     fn cache_path(set: &str, name: &str) -> PathBuf {
@@ -71,20 +76,33 @@ impl IconifyWidget {
 }
 
 impl Widget for IconifyWidget {
-    fn name(&self) -> &str { "iconify" }
+    fn name(&self) -> &str {
+        "iconify"
+    }
 
-    fn draw(&mut self, canvas: &mut Canvas, value: &str, _min: f64, _max: f64, config: &WidgetConfig) -> bool {
-        if value.is_empty() { return false; }
+    fn draw(
+        &mut self,
+        canvas: &mut Canvas,
+        value: &str,
+        _min: f64,
+        _max: f64,
+        config: &WidgetConfig,
+    ) -> bool {
+        if value.is_empty() {
+            return false;
+        }
 
-        let icon_set   = config.get_str("iconSet", "mdi").to_string();
-        let color_str  = config.get_str("color",   "#ffffff");
-        let rect       = config.rect;
+        let icon_set = config.get_str("iconSet", "mdi").to_string();
+        let color_str = config.get_str("color", "#ffffff");
+        let rect = config.rect;
 
         let key = (icon_set.clone(), value.to_string());
 
         if !self.svg_cache.contains_key(&key) {
             match Self::load_svg(&icon_set, value, color_str) {
-                Some(svg) => { self.svg_cache.insert(key.clone(), svg); }
+                Some(svg) => {
+                    self.svg_cache.insert(key.clone(), svg);
+                }
                 None => return false,
             }
         }
@@ -113,7 +131,9 @@ pub fn render_svg_into_canvas(svg_data: &str, canvas: &mut Canvas, rect: crate::
 
     let w = rect.width.max(1);
     let h = rect.height.max(1);
-    let Some(mut pixmap) = tiny_skia::Pixmap::new(w, h) else { return };
+    let Some(mut pixmap) = tiny_skia::Pixmap::new(w, h) else {
+        return;
+    };
 
     // Scale SVG to fit rect, preserving aspect ratio
     let svg_w = tree.size().width();
@@ -139,7 +159,11 @@ fn fetch_svg_blocking(url: &str) -> Option<String> {
         .ok()?;
     if output.status.success() {
         let s = String::from_utf8(output.stdout).ok()?;
-        if s.trim_start().starts_with('<') { Some(s) } else { None }
+        if s.trim_start().starts_with('<') {
+            Some(s)
+        } else {
+            None
+        }
     } else {
         None
     }

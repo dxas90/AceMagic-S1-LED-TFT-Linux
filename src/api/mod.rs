@@ -1,12 +1,12 @@
 pub mod routes;
 
-use std::sync::Arc;
-use axum::Router;
-use tower_http::cors::{CorsLayer, Any};
 use crate::app::AppState;
+use axum::Router;
+use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
 
 pub fn build_router(state: Arc<AppState>) -> Router {
-    use axum::routing::{get, post, put, delete};
+    use axum::routing::{delete, get, post, put};
     use routes::*;
 
     Router::new()
@@ -57,6 +57,11 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         // System
         .route("/api/restart", post(restart_app))
         .route("/api/version", get(get_version))
-        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
         .with_state(state)
 }

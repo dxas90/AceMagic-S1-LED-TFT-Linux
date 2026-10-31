@@ -1,9 +1,9 @@
-pub mod history;
-pub mod clock;
 pub mod calendar;
-pub mod cpu_usage;
-pub mod cpu_temp;
+pub mod clock;
 pub mod cpu_power;
+pub mod cpu_temp;
+pub mod cpu_usage;
+pub mod history;
 pub mod memory;
 pub mod network;
 pub mod space;
@@ -13,14 +13,36 @@ use std::collections::HashMap;
 
 pub trait Sensor: Send + Sync {
     fn name(&self) -> &str;
-    fn sample(&mut self, rate_ms: u64, format: &str) -> SensorReading;
+    /// Sample the sensor and return raw data fields. Field indices match the
+    /// {N} tokens used in widget format strings. The first field ({0}) is
+    /// always the primary display value.
+    fn sample(&mut self, rate_ms: u64) -> SensorReading;
     fn stop(&mut self) {}
 }
 
 pub struct SensorReading {
-    pub value: String,
+    /// Raw data fields indexed by {N} tokens in format strings.
+    pub fields: Vec<String>,
     pub min: f64,
     pub max: f64,
+}
+
+impl SensorReading {
+    pub fn new(fields: Vec<String>, min: f64, max: f64) -> Self {
+        Self { fields, min, max }
+    }
+
+    /// Apply a widget format string using this reading's fields.
+    /// An empty template returns the first field (primary value).
+    pub fn format(&self, template: &str) -> String {
+        let refs: Vec<&str> = self.fields.iter().map(|s| s.as_str()).collect();
+        apply_format(template, &refs)
+    }
+
+    /// The primary display value — always `fields[0]`.
+    pub fn value(&self) -> &str {
+        self.fields.first().map(|s| s.as_str()).unwrap_or("")
+    }
 }
 
 pub type SensorMap = HashMap<String, Box<dyn Sensor>>;
@@ -72,7 +94,7 @@ pub fn apply_format(template: &str, fields: &[&str]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::apply_format;
+    use super::{apply_format, SensorReading};
 
     #[test]
     fn test_apply_format() {
@@ -81,5 +103,46 @@ mod tests {
         assert_eq!(apply_format("{2}", &["a", "b", "c"]), "c");
         assert_eq!(apply_format("no tokens", &["x"]), "no tokens");
         assert_eq!(apply_format("{0}%", &["72"]), "72%");
+    }
+
+    #[test]
+    fn apply_format_empty_template_returns_first_field() {
+        assert_eq!(apply_format("", &["primary", "secondary"]), "primary");
+    }
+
+    #[test]
+    fn apply_format_out_of_range_index_emits_literal() {
+        assert_eq!(apply_format("{5}", &["only_one"]), "{5}");
+    }
+
+    #[test]
+    fn sensor_reading_value_returns_first_field() {
+        let r = SensorReading::new(vec!["42".into(), "history".into()], 0.0, 100.0);
+        assert_eq!(r.value(), "42");
+    }
+
+    #[test]
+    fn sensor_reading_value_empty_fields() {
+        let r = SensorReading::new(vec![], 0.0, 100.0);
+        assert_eq!(r.value(), "");
+    }
+
+    #[test]
+    fn sensor_reading_format_applies_template() {
+        let r = SensorReading::new(vec!["72".into(), "°C".into()], 0.0, 100.0);
+        assert_eq!(r.format("{0} {1}"), "72 °C");
+    }
+
+    #[test]
+    fn sensor_reading_format_empty_returns_first_field() {
+        let r = SensorReading::new(vec!["42".into(), "other".into()], 0.0, 100.0);
+        assert_eq!(r.format(""), "42");
+    }
+
+    #[test]
+    fn sensor_reading_min_max() {
+        let r = SensorReading::new(vec!["50".into()], 10.0, 90.0);
+        assert_eq!(r.min, 10.0);
+        assert_eq!(r.max, 90.0);
     }
 }

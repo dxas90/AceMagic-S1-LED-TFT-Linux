@@ -5,20 +5,20 @@
 
 #![allow(dead_code)]
 
+mod api;
+mod app;
 mod config;
 mod error;
 mod hardware;
 mod render;
 mod sensors;
-mod app;
-mod api;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing_subscriber::{EnvFilter, fmt};
+use tracing_subscriber::{fmt, EnvFilter};
 
-use crate::app::{AppState, DrawLoop, LcdCommand, lcd_worker, led_worker, load_config, load_theme};
+use crate::app::{lcd_worker, led_worker, load_config, load_theme, AppState, DrawLoop, LcdCommand};
 use crate::config::{AppConfig, SensorInstanceConfig};
 use crate::hardware::led::LedCommand;
 use crate::sensors::{Sensor, SensorMap};
@@ -29,8 +29,9 @@ const DEFAULT_CONFIG: &str = "config.toml";
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Tracing ──────────────────────────────────────────────────────────────
     fmt()
-        .with_env_filter(EnvFilter::from_default_env()
-            .add_directive("acemagic_s1=info".parse().unwrap()))
+        .with_env_filter(
+            EnvFilter::from_default_env().add_directive("acemagic_s1=info".parse().unwrap()),
+        )
         .init();
 
     // ── Config ───────────────────────────────────────────────────────────────
@@ -40,7 +41,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| DEFAULT_CONFIG.to_string());
 
     let cfg = match load_config(&config_path) {
-        Ok(c) => { tracing::info!("Loaded config from {config_path}"); c }
+        Ok(c) => {
+            tracing::info!("Loaded config from {config_path}");
+            c
+        }
         Err(e) => {
             tracing::warn!("Could not load {config_path}: {e} — using defaults");
             crate::config::AppConfig::default()
@@ -48,7 +52,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let theme = match load_theme(&cfg.theme.file) {
-        Ok(t) => { tracing::info!("Loaded theme from {}", cfg.theme.file); t }
+        Ok(t) => {
+            tracing::info!("Loaded theme from {}", cfg.theme.file);
+            t
+        }
         Err(e) => {
             tracing::warn!("Could not load theme {}: {e}", cfg.theme.file);
             crate::config::Theme {
@@ -70,7 +77,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lcd_result = tokio::task::spawn_blocking(move || {
         let api = hidapi::HidApi::new()?;
         crate::hardware::lcd::LcdDevice::open(&api, &lcd_path)
-    }).await?;
+    })
+    .await?;
 
     match lcd_result {
         Ok(lcd) => {
@@ -90,9 +98,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── LED hardware worker ───────────────────────────────────────────────────
     let led_path = cfg.device.led.clone();
 
-    let led_result = tokio::task::spawn_blocking(move || {
-        crate::hardware::led::LedDevice::open(&led_path)
-    }).await?;
+    let led_result =
+        tokio::task::spawn_blocking(move || crate::hardware::led::LedDevice::open(&led_path))
+            .await?;
 
     match led_result {
         Ok(led) => {
@@ -130,16 +138,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn shutdown_signal() {
-    tokio::signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install Ctrl+C handler");
     tracing::info!("Received shutdown signal");
 }
 
 fn build_sensor_map(cfg: &AppConfig) -> SensorMap {
-    use crate::sensors::clock::ClockSensor;
     use crate::sensors::calendar::CalendarSensor;
-    use crate::sensors::cpu_usage::CpuUsageSensor;
-    use crate::sensors::cpu_temp::CpuTempSensor;
+    use crate::sensors::clock::ClockSensor;
     use crate::sensors::cpu_power::CpuPowerSensor;
+    use crate::sensors::cpu_temp::CpuTempSensor;
+    use crate::sensors::cpu_usage::CpuUsageSensor;
     use crate::sensors::memory::MemorySensor;
     use crate::sensors::network::NetworkSensor;
     use crate::sensors::space::SpaceSensor;
@@ -152,12 +162,12 @@ fn build_sensor_map(cfg: &AppConfig) -> SensorMap {
         let max_points = param_usize(sc, "max_points", 300);
 
         let sensor: Box<dyn Sensor> = match sc.sensor_type.as_str() {
-            "clock"    => Box::new(ClockSensor),
+            "clock" => Box::new(ClockSensor),
             "calendar" => Box::new(CalendarSensor),
             "cpu_usage" => Box::new(CpuUsageSensor::new(max_points)),
             "cpu_power" => Box::new(CpuPowerSensor::new(max_points)),
-            "memory"    => Box::new(MemorySensor::new(max_points)),
-            "cpu_temp"  => {
+            "memory" => Box::new(MemorySensor::new(max_points)),
+            "cpu_temp" => {
                 let fahrenheit = param_bool(sc, "fahrenheit", false);
                 Box::new(CpuTempSensor::new(max_points, fahrenheit))
             }
@@ -170,13 +180,16 @@ fn build_sensor_map(cfg: &AppConfig) -> SensorMap {
                 Box::new(SpaceSensor::new(&name, mount, max_points))
             }
             "weather" => {
-                let city    = param_str(sc, "city").unwrap_or_else(|| "London".into());
+                let city = param_str(sc, "city").unwrap_or_else(|| "London".into());
                 let country = param_str(sc, "country").unwrap_or_else(|| "GB".into());
                 let imperial = param_bool(sc, "imperial", false);
                 let forecast = param_usize(sc, "forecast", 0) as u8;
                 Box::new(WeatherSensor::new(city, country, imperial, forecast))
             }
-            t => { tracing::warn!("Unknown sensor type: {t}"); continue; }
+            t => {
+                tracing::warn!("Unknown sensor type: {t}");
+                continue;
+            }
         };
 
         map.insert(name, sensor);
@@ -190,14 +203,16 @@ fn param_str(sc: &SensorInstanceConfig, key: &str) -> Option<String> {
 }
 
 fn param_usize(sc: &SensorInstanceConfig, key: &str, default: usize) -> usize {
-    sc.params.get(key)
+    sc.params
+        .get(key)
         .and_then(|v| v.as_integer())
         .map(|n| n as usize)
         .unwrap_or(default)
 }
 
 fn param_bool(sc: &SensorInstanceConfig, key: &str, default: bool) -> bool {
-    sc.params.get(key)
+    sc.params
+        .get(key)
         .and_then(|v| v.as_bool())
         .unwrap_or(default)
 }

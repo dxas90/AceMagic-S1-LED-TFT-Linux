@@ -15,32 +15,49 @@ pub struct DoughnutWidget {
 }
 
 impl DoughnutWidget {
-    pub fn new() -> Self { Self { last_value: -1.0 } }
+    pub fn new() -> Self {
+        Self { last_value: -1.0 }
+    }
 }
 
 impl Widget for DoughnutWidget {
-    fn name(&self) -> &str { "doughnut" }
+    fn name(&self) -> &str {
+        "doughnut"
+    }
 
-    fn draw(&mut self, canvas: &mut Canvas, value: &str, _min: f64, _max: f64, config: &WidgetConfig) -> bool {
+    fn draw(
+        &mut self,
+        canvas: &mut Canvas,
+        value: &str,
+        _min: f64,
+        _max: f64,
+        config: &WidgetConfig,
+    ) -> bool {
         let pct: f64 = value.parse::<f64>().unwrap_or(0.0).clamp(0.0, 100.0);
         let changed = (pct - self.last_value).abs() > 0.4;
-        if !changed && config.refresh == 0 { return false; }
+        if !changed && config.refresh == 0 {
+            return false;
+        }
         self.last_value = pct;
 
         let rect = config.rect;
-        let used_str  = config.get_str("used",          "#00e600");
-        let free_str  = config.get_str("free",          "#333333");
-        let bg_str    = config.get_str("background",    "#000000");
-        let rot_deg   = config.get_f64("rotation",      225.0) as f32;
-        let circ_deg  = config.get_f64("circumference", 270.0) as f32;
-        let cutout_s  = config.get_str("cutout",        "80%");
+        let used_str = config.get_str("used", "#00e600");
+        let free_str = config.get_str("free", "#333333");
+        let bg_str = config.get_str("background", "#000000");
+        let rot_deg = config.get_f64("rotation", 225.0) as f32;
+        let circ_deg = config.get_f64("circumference", 270.0) as f32;
+        let cutout_s = config.get_str("cutout", "80%");
 
         let used_color = Color::from_hex(used_str).unwrap_or(Color::new(0, 230, 0));
         let free_color = Color::from_hex(free_str).unwrap_or(Color::new(51, 51, 51));
-        let bg_color   = Color::from_hex(bg_str).unwrap_or(Color::BLACK);
+        let bg_color = Color::from_hex(bg_str).unwrap_or(Color::BLACK);
 
         let cutout: f32 = if cutout_s.ends_with('%') {
-            cutout_s.trim_end_matches('%').parse::<f32>().unwrap_or(80.0) / 100.0
+            cutout_s
+                .trim_end_matches('%')
+                .parse::<f32>()
+                .unwrap_or(80.0)
+                / 100.0
         } else {
             cutout_s.parse::<f32>().unwrap_or(0.8)
         };
@@ -55,12 +72,20 @@ impl Widget for DoughnutWidget {
         let to_rad = std::f32::consts::PI / 180.0;
         let start_rad = rot_deg * to_rad;
         let total_rad = circ_deg * to_rad;
-        let used_rad  = total_rad * (pct / 100.0) as f32;
-        let free_rad  = total_rad - used_rad;
+        let used_rad = total_rad * (pct / 100.0) as f32;
+        let free_rad = total_rad - used_rad;
 
         // Draw free (background) arc first
         if free_rad > 0.001 {
-            canvas.fill_arc(cx, cy, r_outer, r_inner, start_rad + used_rad, free_rad, free_color);
+            canvas.fill_arc(
+                cx,
+                cy,
+                r_outer,
+                r_inner,
+                start_rad + used_rad,
+                free_rad,
+                free_color,
+            );
         }
         // Draw used arc on top
         if used_rad > 0.001 {

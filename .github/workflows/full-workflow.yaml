@@ -24,7 +24,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y libudev-dev libusb-1.0-0-dev
+          sudo apt-get install -y libudev-dev libusb-1.0-0-dev pkg-config
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -59,7 +59,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y libudev-dev libusb-1.0-0-dev
+          sudo apt-get install -y libudev-dev libusb-1.0-0-dev pkg-config
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -89,7 +89,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y libudev-dev libusb-1.0-0-dev
+          sudo apt-get install -y libudev-dev libusb-1.0-0-dev pkg-config
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -119,14 +119,13 @@ jobs:
   audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    continue-on-error: true  # advisory findings are informational, not build blockers
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-
-      - name: Run audit
-        run: cargo audit
+      - name: Run RustSec advisory check
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

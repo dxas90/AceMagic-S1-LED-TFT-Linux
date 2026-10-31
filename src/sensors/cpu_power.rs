@@ -33,9 +33,15 @@ impl CpuPowerSensor {
         };
         let mut total = 0u64;
         for entry in dir.flatten() {
-            let path = entry.path().join("energy_uj");
-            if let Ok(s) = fs::read_to_string(&path) {
-                total = total.saturating_add(s.trim().parse::<u64>().unwrap_or(0));
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            // Only include package-level entries (intel-rapl:N), not sub-domains
+            // (intel-rapl:N:M) which would double-count package energy.
+            if name_str.starts_with("intel-rapl:") && name_str.matches(':').count() == 1 {
+                let path = entry.path().join("energy_uj");
+                if let Ok(s) = fs::read_to_string(&path) {
+                    total = total.saturating_add(s.trim().parse::<u64>().unwrap_or(0));
+                }
             }
         }
         total

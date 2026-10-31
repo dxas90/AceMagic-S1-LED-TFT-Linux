@@ -13,8 +13,8 @@ use std::path::PathBuf;
 /// SVGs are cached to `~/.cache/acemagic-s1/icons/{set}/{name}.svg`.
 /// On first render the SVG is fetched synchronously; subsequent renders use disk cache.
 pub struct IconifyWidget {
-    /// (set, name) -> rendered SVG bytes
-    svg_cache: HashMap<(String, String), String>,
+    /// (set, name, color) -> pre-colored SVG string
+    svg_cache: HashMap<(String, String, String), String>,
 }
 
 impl IconifyWidget {
@@ -96,7 +96,7 @@ impl Widget for IconifyWidget {
         let color_str = config.get_str("color", "#ffffff");
         let rect = config.rect;
 
-        let key = (icon_set.clone(), value.to_string());
+        let key = (icon_set.clone(), value.to_string(), color_str.to_string());
 
         if !self.svg_cache.contains_key(&key) {
             match Self::load_svg(&icon_set, value, color_str) {

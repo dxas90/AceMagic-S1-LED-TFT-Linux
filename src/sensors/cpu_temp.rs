@@ -32,14 +32,24 @@ impl CpuTempSensor {
         for entry in dir.flatten() {
             let base = entry.path();
             let name = fs::read_to_string(base.join("name")).unwrap_or_default();
-            if !name.trim().starts_with("coretemp") {
-                continue;
-            }
+            let driver = name.trim();
+
+            // Priority labels per driver; first match wins.
+            let labels: &[&str] = match driver {
+                "coretemp" => &["Package id 0"],
+                "k10temp" | "zenpower" => &["Tdie", "Tctl", "Tccd1"],
+                _ => continue,
+            };
+
             for i in 1..=32u32 {
                 let label =
                     fs::read_to_string(base.join(format!("temp{i}_label"))).unwrap_or_default();
-                if label.trim() == "Package id 0" {
-                    return Some(base.join(format!("temp{i}_input")));
+                let label_str = label.trim();
+                if labels.contains(&label_str) {
+                    let input_path = base.join(format!("temp{i}_input"));
+                    if input_path.exists() {
+                        return Some(input_path);
+                    }
                 }
             }
         }

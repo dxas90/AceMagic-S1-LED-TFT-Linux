@@ -42,7 +42,13 @@ fn wmo_description(code: u16) -> &'static str {
 }
 
 fn wind_direction_abbrev(degrees: f64) -> &'static str {
-    let idx = (((degrees + 22.5) / 45.0) as usize) % 8;
+    // Clamp to [0, 360) before converting; handles NaN and negative values.
+    let d = if degrees.is_finite() {
+        (degrees % 360.0 + 360.0) % 360.0
+    } else {
+        0.0
+    };
+    let idx = (((d + 22.5) / 45.0) as usize) % 8;
     ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][idx]
 }
 
@@ -147,7 +153,10 @@ async fn fetch_weather(
     forecast: u8,
     state: Arc<RwLock<Option<WeatherData>>>,
 ) {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .unwrap_or_default();
     let mut last_city_info: Option<GeoResult> = None;
 
     loop {

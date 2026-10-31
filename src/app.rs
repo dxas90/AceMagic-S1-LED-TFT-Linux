@@ -82,7 +82,6 @@ impl AppState {
 pub struct DrawLoop {
     state: Arc<AppState>,
     widget_cache: HashMap<u32, Box<dyn Widget>>,
-    prev_pixmap: Vec<u8>,
     screen_entered_at: Instant,
     heartbeat_at: Instant,
 }
@@ -92,7 +91,6 @@ impl DrawLoop {
         Self {
             state,
             widget_cache: HashMap::new(),
-            prev_pixmap: Vec::new(),
             screen_entered_at: Instant::now(),
             heartbeat_at: Instant::now(),
         }
@@ -187,9 +185,9 @@ impl DrawLoop {
                     let pixels = extract_rect_pixels(
                         canvas.data(),
                         canvas.width(),
+                        canvas.height(),
                         sub,
                         is_portrait,
-                        canvas.data(),
                     );
                     let _ = self
                         .state
@@ -299,9 +297,9 @@ pub fn led_worker(mut rx: mpsc::Receiver<LedCommand>, mut device: LedDevice) {
 fn extract_rect_pixels(
     data: &[u8],
     canvas_w: u32,
+    canvas_h: u32,
     rect: Rect,
     portrait: bool,
-    _full_data: &[u8],
 ) -> Vec<u16> {
     use crate::hardware::lcd::rgba_to_rgb565_be;
     let stride = canvas_w as usize * 4;
@@ -310,9 +308,11 @@ fn extract_rect_pixels(
     for row in 0..rect.height {
         for col in 0..rect.width {
             let (cx, cy) = if portrait {
-                // portrait: physical (px, py) comes from logical (H-1-py, px)
-                let lx = (169 - (rect.y as u32 + row)) as usize;
-                let ly = (rect.x + col as i32) as usize;
+                // Portrait: physical (col, row) within rect maps to logical coords.
+                // logical_x = (canvas_h - 1) - (rect.y + row)
+                // logical_y = rect.x + col
+                let lx = (canvas_h as i32 - 1 - rect.y - row as i32).max(0) as usize;
+                let ly = (rect.x + col as i32).max(0) as usize;
                 (lx, ly)
             } else {
                 (

@@ -76,6 +76,12 @@ impl LcdDevice {
     /// `pixels` must contain exactly `rect.width * rect.height` RGB565 big-endian values.
     /// Maximum: 2048 pixels (4096 bytes). Call `split_update_region` first for larger rects.
     pub fn partial_update(&self, rect: Rect, pixels: &[u16]) -> crate::error::Result<()> {
+        if rect.x < 0 || rect.y < 0 {
+            return Err(crate::error::Error::Config(format!(
+                "partial_update: rect has negative coordinates ({}, {})",
+                rect.x, rect.y
+            )));
+        }
         debug_assert_eq!(
             pixels.len(),
             (rect.width * rect.height) as usize,
@@ -108,13 +114,13 @@ impl LcdDevice {
     ///
     /// `pixels` must be exactly 320 × 170 = 54400 RGB565 big-endian values (108800 bytes total).
     pub fn full_redraw(&self, pixels: &[u16]) -> crate::error::Result<()> {
-        debug_assert_eq!(
-            pixels.len(),
-            320 * 170,
-            "full redraw needs exactly {} pixels, got {}",
-            320 * 170,
-            pixels.len()
-        );
+        if pixels.len() != 320 * 170 {
+            return Err(crate::error::Error::Config(format!(
+                "full redraw needs exactly {} pixels, got {}",
+                320 * 170,
+                pixels.len()
+            )));
+        }
 
         let mut buf = [0u8; BUFFER_SIZE];
         buf[1] = SIGNATURE;
@@ -172,6 +178,15 @@ pub fn rgba_to_rgb565_be(r: u8, g: u8, b: u8) -> u16 {
 pub fn pixmap_to_rgb565(data: &[u8], _portrait: bool) -> Vec<u16> {
     const W: usize = 320;
     const H: usize = 170;
+    let expected = W * H * 4;
+    if data.len() < expected {
+        tracing::warn!(
+            "pixmap_to_rgb565: expected {} bytes, got {} — returning blank frame",
+            expected,
+            data.len()
+        );
+        return vec![0u16; W * H];
+    }
     let stride = W * 4;
     let mut out = Vec::with_capacity(W * H);
     for row in 0..H {

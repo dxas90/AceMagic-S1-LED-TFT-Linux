@@ -16,6 +16,8 @@ pub struct NetworkSensor {
     prev_tx_packets: u64,
     prev_time: Instant,
     max_bps: f64,
+    /// True until first valid sample has been stored; skips rate computation on sample 0.
+    initialized: bool,
 }
 
 impl NetworkSensor {
@@ -35,12 +37,15 @@ impl NetworkSensor {
             prev_tx_packets: 0,
             prev_time: Instant::now(),
             max_bps: 0.0,
+            initialized: false,
         }
     }
 
     pub fn parse_net_dev_line(line: &str, iface: &str) -> Option<(u64, u64, u64, u64)> {
         let trimmed = line.trim_start();
-        if !trimmed.starts_with(iface) {
+        // Match "iface:" exactly to avoid "eth0" matching "eth00:" or "eth0:1:" lines.
+        let prefix = format!("{}:", iface);
+        if !trimmed.starts_with(&prefix) {
             return None;
         }
         let after_colon = trimmed.split_once(':').map(|(_, r)| r)?;
@@ -54,6 +59,17 @@ impl NetworkSensor {
             fields.get(8).copied().unwrap_or(0),  // tx_bytes
             fields.get(9).copied().unwrap_or(0),  // tx_packets
         ))
+    }
+
+    /// Compute the delta between two counter readings, handling 32-bit wrap.
+    /// Linux exposes u64 counters on 64-bit kernels; older 32-bit kernels wrap at 2^32.
+    fn counter_delta(current: u64, prev: u64) -> u64 {
+        if current >= prev {
+            current - prev
+        } else {
+            // Likely a 32-bit counter wrap (rolls over at 2^32 ≈ 4 GiB).
+            current.saturating_add((u32::MAX as u64).saturating_add(1).saturating_sub(prev))
+        }
     }
 
     fn read_net_dev(&self) -> Option<(u64, u64, u64, u64)> {
@@ -105,11 +121,18 @@ impl Sensor for NetworkSensor {
         let (rx_bytes, rx_packets, tx_bytes, tx_packets) =
             self.read_net_dev().unwrap_or((0, 0, 0, 0));
 
-        let rx_bps = rx_bytes.saturating_sub(self.prev_rx_bytes) as f64 / elapsed;
-        let tx_bps = tx_bytes.saturating_sub(self.prev_tx_bytes) as f64 / elapsed;
-        let rx_pps = rx_packets.saturating_sub(self.prev_rx_packets) as f64 / elapsed;
-        let tx_pps = tx_packets.saturating_sub(self.prev_tx_packets) as f64 / elapsed;
+        let (rx_bps, tx_bps, rx_pps, tx_pps) = if self.initialized {
+            let rx_bps = Self::counter_delta(rx_bytes, self.prev_rx_bytes) as f64 / elapsed;
+            let tx_bps = Self::counter_delta(tx_bytes, self.prev_tx_bytes) as f64 / elapsed;
+            let rx_pps = Self::counter_delta(rx_packets, self.prev_rx_packets) as f64 / elapsed;
+            let tx_pps = Self::counter_delta(tx_packets, self.prev_tx_packets) as f64 / elapsed;
+            (rx_bps, tx_bps, rx_pps, tx_pps)
+        } else {
+            self.initialized = true;
+            (0.0, 0.0, 0.0, 0.0)
+        };
 
+        // Cache one link speed read per tick (used twice below)
         let link_cap = self.read_link_speed() as f64;
         let observed = rx_bps.max(tx_bps);
         self.max_bps = (self.max_bps.max(observed * 1.5)).min(if link_cap > 0.0 {
@@ -130,7 +153,7 @@ impl Sensor for NetworkSensor {
         self.tx_pps_history.push(tx_pps);
 
         let mtu = self.read_mtu();
-        let link_mbps = (self.read_link_speed() * 8 / 1_000_000).to_string();
+        let link_mbps = (link_cap as u64 * 8 / 1_000_000).to_string();
 
         // Tokens matching network.js (0-18)
         SensorReading::new(
@@ -187,6 +210,36 @@ mod tests {
         assert!(NetworkSensor::fmt_rate(5_000.0).contains("Kbps"));
         assert!(NetworkSensor::fmt_rate(5_000_000.0).contains("Mbps"));
         assert!(NetworkSensor::fmt_rate(2_000_000_000.0).contains("Gbps"));
+    }
+
+    #[test]
+    fn parse_net_dev_line_no_partial_match() {
+        // "eth0" must not match a line for "eth00"
+        let line = " eth00:  2000 20 0 0 0 0 0 0   1000 10 0 0 0 0 0 0";
+        assert!(NetworkSensor::parse_net_dev_line(line, "eth0").is_none());
+    }
+
+    #[test]
+    fn counter_delta_normal() {
+        assert_eq!(NetworkSensor::counter_delta(1000, 500), 500);
+    }
+
+    #[test]
+    fn counter_delta_wrap_32bit() {
+        // Simulates a 32-bit counter wrapping from u32::MAX to 100
+        let prev = u32::MAX as u64;
+        let current = 100u64;
+        let delta = NetworkSensor::counter_delta(current, prev);
+        assert_eq!(delta, 101); // 100 - MAX + (MAX+1) = 101
+    }
+
+    #[test]
+    fn first_sample_no_spike() {
+        let mut s = NetworkSensor::new("lo", 10);
+        let r = s.sample(500);
+        // First sample: rx/tx rates should be 0, not a spike
+        assert_eq!(r.fields[15], "0"); // rx bps raw
+        assert_eq!(r.fields[16], "0"); // tx bps raw
     }
 
     #[test]

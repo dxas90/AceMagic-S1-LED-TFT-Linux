@@ -59,8 +59,7 @@ pub async fn save_config_route(
         Err(e) => return (StatusCode::BAD_REQUEST, Json(json!({"error": e.to_string()}))).into_response(),
     };
     let path = {
-        let cfg = state.config.read().await;
-        // Use the same path the binary was launched with; default to config.toml
+        let _cfg = state.config.read().await;
         "config.toml".to_string()
     };
     if let Err(e) = save_config(&new_config, &path) {

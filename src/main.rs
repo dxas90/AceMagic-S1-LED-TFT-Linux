@@ -3,6 +3,8 @@
 //! Usage:
 //!   acemagic-s1 [--config <path>]   (default: config.toml in CWD)
 
+#![allow(dead_code)]
+
 mod config;
 mod error;
 mod hardware;

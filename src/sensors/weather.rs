@@ -176,7 +176,7 @@ async fn fetch_weather(
                     geo.latitude, geo.longitude, temp_unit, wind_unit, precip_unit_str
                 )
             } else {
-                let day_idx = forecast.saturating_sub(1);
+                let _day_idx = forecast.saturating_sub(1);
                 format!(
                     "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&daily=temperature_2m_max,temperature_2m_min,windspeed_10m_max,winddirection_10m_dominant,weathercode,precipitation_sum&temperature_unit={}&windspeed_unit={}&precipitation_unit={}&forecast_days=7",
                     geo.latitude, geo.longitude, temp_unit, wind_unit, precip_unit_str

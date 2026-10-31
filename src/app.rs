@@ -233,7 +233,13 @@ impl DrawLoop {
             let widget = self
                 .widget_cache
                 .entry(widget_cfg.id)
-                .or_insert_with(|| create_widget(&widget_cfg.name));
+                .or_insert_with(|| {
+                    crate::render::widgets::create_widget(&widget_cfg.name)
+                        .unwrap_or_else(|| {
+                            warn!("Unknown widget type: {}, falling back to text", widget_cfg.name);
+                            Box::new(crate::render::widgets::text::TextWidget::new())
+                        })
+                });
 
             let changed = widget.draw(&mut canvas, &value, min, max, widget_cfg);
             if changed || force_redraw {
@@ -267,35 +273,6 @@ pub fn led_worker(mut rx: mpsc::Receiver<LedCommand>, mut device: LedDevice) {
     while let Some(cmd) = rx.blocking_recv() {
         if let Err(e) = device.send(cmd) {
             warn!("LED error: {e}");
-        }
-    }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn create_widget(name: &str) -> Box<dyn Widget> {
-    use crate::render::widgets::{
-        text::TextWidget,
-        custom_bar::CustomBarWidget,
-        bar_chart::BarChartWidget,
-        line_chart::LineChartWidget,
-        doughnut::DoughnutWidget,
-        image_widget::ImageWidget,
-        iconify::IconifyWidget,
-        weather_icon::WeatherIconWidget,
-    };
-    match name {
-        "text"          => Box::new(TextWidget::new()),
-        "custom_bar"    => Box::new(CustomBarWidget::new()),
-        "bar_chart"     => Box::new(BarChartWidget::new()),
-        "line_chart"    => Box::new(LineChartWidget::new()),
-        "doughnut"      => Box::new(DoughnutWidget::new()),
-        "image"         => Box::new(ImageWidget::new()),
-        "iconify"       => Box::new(IconifyWidget::new()),
-        "weather_icon"  => Box::new(WeatherIconWidget::new()),
-        _ => {
-            warn!("Unknown widget type: {name}, falling back to text");
-            Box::new(TextWidget::new())
         }
     }
 }

@@ -3,6 +3,7 @@
 //! Protocol reference from s1panel/led_device.js:
 //! - VID: 0x1A86, PID: 0x7523  (CH340 USB-serial)
 //! - Baud: 10000 (non-standard, must be set exactly)
+#![allow(dead_code)]
 //! - 5-byte packet: [0xFA][theme][intensity][speed][checksum]
 //! - checksum = (0xFA + theme + intensity + speed) mod 256
 //! - Inter-byte delay: 5 ms between each byte

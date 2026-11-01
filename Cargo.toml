@@ -1,6 +1,6 @@
 [package]
 name = "acemagic-s1"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 description = "AceMagic S1 LCD/LED panel controller — single binary Rust port of s1panel"
 

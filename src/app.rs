@@ -271,6 +271,9 @@ impl DrawLoop {
 
 /// Runs in a spawned_blocking thread, owns the LCD device.
 pub fn lcd_worker(mut rx: mpsc::Receiver<LcdCommand>, device: LcdDevice) {
+    // Mirror s1panel's START_COOL_DOWN: give the device 1 second after open
+    // before sending the first command (orientation / heartbeat).
+    std::thread::sleep(std::time::Duration::from_millis(1000));
     while let Some(cmd) = rx.blocking_recv() {
         let result = match cmd {
             LcdCommand::Heartbeat => device.heartbeat(),

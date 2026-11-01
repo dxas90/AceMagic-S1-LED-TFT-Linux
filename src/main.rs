@@ -83,10 +83,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match lcd_result {
         Ok(lcd) => {
             tracing::info!("LCD device opened");
-            if let Err(e) = lcd.set_orientation(portrait) {
-                tracing::warn!("LCD orientation: {e}");
-            }
-            let _ = lcd.heartbeat();
+            // Queue initial setup — worker thread handles them without blocking the async runtime.
+            // s1panel uses a 1-second cool-down before first command; we replicate that by
+            // adding a short sleep inside the worker before processing the queue.
+            let _ = lcd_tx.try_send(LcdCommand::SetOrientation(portrait));
+            let _ = lcd_tx.try_send(LcdCommand::Heartbeat);
             tokio::task::spawn_blocking(move || lcd_worker(lcd_rx, lcd));
         }
         Err(e) => {
@@ -134,7 +135,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 
-    Ok(())
+    // spawn_blocking threads hold HID/serial handles and may be mid-write.
+    // The OS releases USB handles on process exit, so force-exit cleanly.
+    std::process::exit(0);
 }
 
 async fn shutdown_signal() {

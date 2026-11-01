@@ -29,7 +29,7 @@ pub fn create_widget(name: &str) -> Option<Box<dyn Widget>> {
         "custom_bar" => Some(Box::new(custom_bar::CustomBarWidget::new())),
         "bar_chart" => Some(Box::new(bar_chart::BarChartWidget::new())),
         "line_chart" => Some(Box::new(line_chart::LineChartWidget::new())),
-        "doughnut" => Some(Box::new(doughnut::DoughnutWidget::new())),
+        "doughnut" | "doughnut_chart" => Some(Box::new(doughnut::DoughnutWidget::new())),
         "image" => Some(Box::new(image_widget::ImageWidget::new())),
         "iconify" => Some(Box::new(iconify::IconifyWidget::new())),
         "weather_icon" => Some(Box::new(weather_icon::WeatherIconWidget::new())),

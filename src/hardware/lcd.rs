@@ -41,24 +41,19 @@ impl LcdDevice {
     /// We enumerate and pick the one with the largest interface_number instead.
     pub fn open(api: &HidApi, path: &str) -> crate::error::Result<Self> {
         let device = if path == "auto" {
-            // The Holtek HT32 (04d9:fd01) exposes two HID interfaces:
-            //   interface 0 — standard HID (usage_page 0x0001, keyboard/boot)
-            //   interface 1 — vendor LCD (usage_page 0xFF00+)
-            // Prefer the vendor-page interface; fall back to highest interface number.
-            let candidates: Vec<_> = api
+            // The Holtek HT32 (04d9:fd01) exposes two HID interfaces.
+            // Interface 1 is the LCD; interface 0 is a standard HID boot device.
+            // usage_page() is unavailable on Linux libusb, so we select by
+            // highest interface_number — works for this device and is portable.
+            let best = api
                 .device_list()
                 .filter(|d| d.vendor_id() == LCD_VID && d.product_id() == LCD_PID)
-                .collect();
-            let best = candidates
-                .iter()
-                .find(|d| d.usage_page() >= 0xFF00)
-                .or_else(|| candidates.iter().max_by_key(|d| d.interface_number()));
+                .max_by_key(|d| d.interface_number());
             match best {
                 Some(info) => {
                     tracing::info!(
-                        "LCD: auto-selected interface {} (usage_page={:#06x}) at {:?}",
+                        "LCD: auto-selected interface {} at {:?}",
                         info.interface_number(),
-                        info.usage_page(),
                         info.path()
                     );
                     api.open_path(info.path())?
@@ -82,12 +77,10 @@ impl LcdDevice {
     pub fn list_devices(api: &HidApi) {
         for info in api.device_list() {
             println!(
-                "VID={:04x} PID={:04x} iface={:2} usage_page={:04x} usage={:04x}  path={:?}  mfr={:?}  prod={:?}",
+                "VID={:04x} PID={:04x} iface={:2}  path={:?}  mfr={:?}  prod={:?}",
                 info.vendor_id(),
                 info.product_id(),
                 info.interface_number(),
-                info.usage_page(),
-                info.usage(),
                 info.path(),
                 info.manufacturer_string().unwrap_or(""),
                 info.product_string().unwrap_or(""),

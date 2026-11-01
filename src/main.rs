@@ -34,6 +34,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
+    // ── Diagnostic mode ──────────────────────────────────────────────────────
+    if std::env::args().any(|a| a == "--list-hid") {
+        let api = hidapi::HidApi::new()?;
+        crate::hardware::lcd::LcdDevice::list_devices(&api);
+        return Ok(());
+    }
+
     // ── Config ───────────────────────────────────────────────────────────────
     let config_path = std::env::args()
         .skip_while(|a| a != "--config")

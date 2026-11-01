@@ -34,15 +34,56 @@ pub struct LcdDevice {
 impl LcdDevice {
     /// Open the LCD by its HID path string (e.g. "1-8:1.1"),
     /// or scan by VID/PID if path == "auto".
+    ///
+    /// The Holtek HT32 (04d9:fd01) exposes the display on its highest-numbered
+    /// HID interface ("1-8:1.1" in s1panel's default config — interface 1).
+    /// `HidApi::open()` returns the *first* matching interface, which is wrong.
+    /// We enumerate and pick the one with the largest interface_number instead.
     pub fn open(api: &HidApi, path: &str) -> crate::error::Result<Self> {
         let device = if path == "auto" {
-            api.open(LCD_VID, LCD_PID)?
+            let best = api
+                .device_list()
+                .filter(|d| d.vendor_id() == LCD_VID && d.product_id() == LCD_PID)
+                .max_by_key(|d| d.interface_number());
+            match best {
+                Some(info) => {
+                    tracing::info!(
+                        "LCD: auto-selected interface {} at {:?}",
+                        info.interface_number(),
+                        info.path()
+                    );
+                    api.open_path(info.path())?
+                }
+                None => {
+                    return Err(crate::error::Error::Config(format!(
+                        "LCD {:04x}:{:04x} not found — run with --list-hid to diagnose",
+                        LCD_VID, LCD_PID
+                    )));
+                }
+            }
         } else {
             let cpath = std::ffi::CString::new(path)
                 .map_err(|_| crate::error::Error::Config("invalid HID path".into()))?;
             api.open_path(cpath.as_c_str())?
         };
         Ok(Self { device })
+    }
+
+    /// List all HID devices to stdout — for diagnostics (`--list-hid`).
+    pub fn list_devices(api: &HidApi) {
+        for info in api.device_list() {
+            println!(
+                "VID={:04x} PID={:04x} iface={:2} usage_page={:04x} usage={:04x}  path={:?}  mfr={:?}  prod={:?}",
+                info.vendor_id(),
+                info.product_id(),
+                info.interface_number(),
+                info.usage_page(),
+                info.usage(),
+                info.path(),
+                info.manufacturer_string().unwrap_or(""),
+                info.product_string().unwrap_or(""),
+            );
+        }
     }
 
     /// Set display orientation. Call once on startup before any drawing.

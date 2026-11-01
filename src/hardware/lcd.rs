@@ -41,15 +41,24 @@ impl LcdDevice {
     /// We enumerate and pick the one with the largest interface_number instead.
     pub fn open(api: &HidApi, path: &str) -> crate::error::Result<Self> {
         let device = if path == "auto" {
-            let best = api
+            // The Holtek HT32 (04d9:fd01) exposes two HID interfaces:
+            //   interface 0 — standard HID (usage_page 0x0001, keyboard/boot)
+            //   interface 1 — vendor LCD (usage_page 0xFF00+)
+            // Prefer the vendor-page interface; fall back to highest interface number.
+            let candidates: Vec<_> = api
                 .device_list()
                 .filter(|d| d.vendor_id() == LCD_VID && d.product_id() == LCD_PID)
-                .max_by_key(|d| d.interface_number());
+                .collect();
+            let best = candidates
+                .iter()
+                .find(|d| d.usage_page() >= 0xFF00)
+                .or_else(|| candidates.iter().max_by_key(|d| d.interface_number()));
             match best {
                 Some(info) => {
                     tracing::info!(
-                        "LCD: auto-selected interface {} at {:?}",
+                        "LCD: auto-selected interface {} (usage_page={:#06x}) at {:?}",
                         info.interface_number(),
+                        info.usage_page(),
                         info.path()
                     );
                     api.open_path(info.path())?
